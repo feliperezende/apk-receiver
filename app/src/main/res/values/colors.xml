@@ -1,0 +1,11 @@
+<resources>
+    <color name="white">#FFFFFFFF</color>
+    <color name="primary">#FF1565C0</color>
+    <color name="primary_dark">#FF0D47A1</color>
+    <color name="surface">#FF121212</color>
+    <color name="item_bg">#FF1E1E1E</color>
+    <color name="muted">#FF9E9E9E</color>
+    <color name="status_ok">#FF7EE787</color>
+    <color name="status_bad">#FFFF6B6B</color>
+    <color name="status_pending">#FFFFC107</color>
+</resources>

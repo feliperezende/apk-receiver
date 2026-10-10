@@ -1,0 +1,19 @@
+<resources>
+    <string name="app_name">APK Receiver</string>
+    <string name="title">APK Receiver</string>
+    <string name="qr_hint">Scan with your iPhone camera to open the download page</string>
+    <string name="port_label">Port</string>
+    <string name="default_port">8080</string>
+    <string name="token_label">Auth token (optional)</string>
+    <string name="autostart_label">Start on boot</string>
+    <string name="silent_label">Silent install (root only)</string>
+    <string name="save">Save &amp; restart server</string>
+    <string name="grant">Grant install permission</string>
+    <string name="copy">Copy URL</string>
+    <string name="status_running">Server running</string>
+    <string name="status_stopped">Server stopped</string>
+    <string name="notif_channel">APK Receiver</string>
+    <string name="notif_title">APK Receiver active</string>
+    <string name="recent_downloads">Recent downloads</string>
+    <string name="no_downloads">No downloads yet.</string>
+</resources>

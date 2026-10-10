@@ -1,0 +1,228 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<meta name="theme-color" content="#1565c0" />
+<title>APK Receiver</title>
+<style>
+  :root { color-scheme: dark; }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    background: #121212;
+    color: #f2f2f2;
+    padding: 20px;
+    -webkit-text-size-adjust: 100%;
+  }
+  header { margin-bottom: 20px; }
+  h1 { font-size: 1.5rem; margin: 0 0 4px; }
+  h2 { font-size: 1.1rem; margin: 24px 0 10px; }
+  .muted { color: #9e9e9e; font-size: 0.85rem; }
+  form {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    background: #1e1e1e;
+    padding: 16px;
+    border-radius: 14px;
+  }
+  label { font-size: 0.85rem; color: #bdbdbd; margin-top: 8px; }
+  input {
+    font-size: 1rem;
+    padding: 12px;
+    border-radius: 10px;
+    border: 1px solid #333;
+    background: #101010;
+    color: #fff;
+    width: 100%;
+  }
+  input:focus { outline: 2px solid #1565c0; border-color: #1565c0; }
+  button {
+    margin-top: 16px;
+    font-size: 1rem;
+    font-weight: 600;
+    padding: 14px;
+    border: none;
+    border-radius: 10px;
+    background: #1565c0;
+    color: #fff;
+    cursor: pointer;
+  }
+  button:disabled { opacity: 0.5; }
+  #msg { min-height: 1.2em; margin: 14px 2px; font-size: 0.9rem; }
+  #msg.error { color: #ff6b6b; }
+  #msg.ok { color: #7ee787; }
+  ul { list-style: none; padding: 0; margin: 0; }
+  li {
+    background: #1e1e1e;
+    border-radius: 10px;
+    padding: 12px;
+    margin-bottom: 8px;
+    font-size: 0.85rem;
+    word-break: break-all;
+  }
+  li .row { display: flex; justify-content: space-between; gap: 8px; align-items: center; }
+  .badge {
+    font-size: 0.72rem;
+    padding: 3px 8px;
+    border-radius: 999px;
+    background: #333;
+    white-space: nowrap;
+  }
+  .badge.running { background: #1565c0; }
+  .badge.queued, .badge.pending, .badge.paused { background: #b8860b; }
+  .badge.ready, .badge.installed, .badge.successful { background: #2e7d32; }
+  .badge.failed { background: #c62828; }
+</style>
+</head>
+<body>
+  <header>
+    <h1>APK Receiver</h1>
+    <p class="muted" id="server">Connecting&hellip;</p>
+  </header>
+
+  <form id="form">
+    <label for="url">APK URL</label>
+    <input id="url" type="url" inputmode="url" autocomplete="off"
+           placeholder="https://example.com/app.apk" required />
+    <label for="name">Filename (optional)</label>
+    <input id="name" type="text" autocomplete="off" placeholder="app.apk" />
+    <button id="submit" type="submit">Download &amp; Install</button>
+  </form>
+
+  <p id="msg"></p>
+
+  <section>
+    <h2>Recent downloads</h2>
+    <ul id="history"><li class="muted">Loading&hellip;</li></ul>
+  </section>
+
+<script>
+(function () {
+  const params = new URLSearchParams(location.search);
+  const token = params.get("token") || "";
+
+  const form = document.getElementById("form");
+  const urlInput = document.getElementById("url");
+  const nameInput = document.getElementById("name");
+  const submitBtn = document.getElementById("submit");
+  const msg = document.getElementById("msg");
+  const historyEl = document.getElementById("history");
+  const serverEl = document.getElementById("server");
+
+  const STATUS_LABEL = {
+    queued: "Queued",
+    pending: "Pending",
+    running: "Downloading",
+    paused: "Paused",
+    ready: "Ready to install",
+    installed: "Installed",
+    successful: "Done",
+    failed: "Failed"
+  };
+  const ACTIVE_STATUSES = ["queued", "pending", "running", "paused"];
+
+  function setMsg(text, kind) {
+    msg.textContent = text || "";
+    msg.className = kind || "";
+  }
+
+  function authHeaders() {
+    return token ? { "X-Auth-Token": token } : {};
+  }
+
+  function ping() {
+    fetch("/ping", { headers: authHeaders() })
+      .then(r => r.json())
+      .then(d => { serverEl.textContent = "Server online - " + location.host; })
+      .catch(() => { serverEl.textContent = "Server offline"; });
+  }
+
+  function renderHistory(items) {
+    if (!items || !items.length) {
+      historyEl.innerHTML = '<li class="muted">No downloads yet.</li>';
+      return;
+    }
+    historyEl.innerHTML = items.map(it => {
+      const when = new Date(it.time || Date.now()).toLocaleString();
+      const st = it.status || "queued";
+      return `<li data-id="${it.id}">
+        <div class="row">
+          <strong>${escapeHtml(it.name || "download.apk")}</strong>
+          <span class="badge ${st}" id="badge-${it.id}">${STATUS_LABEL[st] || st}</span>
+        </div>
+        <div class="muted">${escapeHtml(it.url || "")}</div>
+        <div class="muted">${when}</div>
+      </li>`;
+    }).join("");
+    items.forEach(it => {
+      if (ACTIVE_STATUSES.includes(it.status || "queued")) pollStatus(it.id, true);
+    });
+  }
+
+  function escapeHtml(s) {
+    return String(s).replace(/[&<>"']/g, c => ({
+      "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;"
+    }[c]));
+  }
+
+  function loadHistory() {
+    fetch("/history", { headers: authHeaders() })
+      .then(r => r.json())
+      .then(d => renderHistory(d.items))
+      .catch(() => { historyEl.innerHTML = '<li class="muted">Could not load history.</li>'; });
+  }
+
+  function pollStatus(id, once) {
+    fetch("/status?id=" + id, { headers: authHeaders() })
+      .then(r => r.json())
+      .then(d => {
+        const badge = document.getElementById("badge-" + id);
+        if (badge) {
+          const label = STATUS_LABEL[d.status] || d.status || "?";
+          badge.textContent = label;
+          badge.className = "badge " + (d.status || "");
+        }
+        const done = d.status === "successful" || d.status === "failed";
+        if (!done && !once) setTimeout(() => pollStatus(id, false), 1500);
+      })
+      .catch(() => {});
+  }
+
+  form.addEventListener("submit", function (e) {
+    e.preventDefault();
+    const url = urlInput.value.trim();
+    if (!url) return;
+    submitBtn.disabled = true;
+    setMsg("Sending to TV\u2026");
+
+    fetch("/fetch", {
+      method: "POST",
+      headers: Object.assign({ "Content-Type": "application/json" }, authHeaders()),
+      body: JSON.stringify({ url: url, name: nameInput.value.trim() || undefined, token: token || undefined })
+    })
+      .then(async r => {
+        const data = await r.json().catch(() => ({}));
+        if (!r.ok) throw new Error(data.error || ("HTTP " + r.status));
+        return data;
+      })
+      .then(data => {
+        setMsg("Download started: " + (data.name || ""), "ok");
+        urlInput.value = "";
+        nameInput.value = "";
+        loadHistory();
+        pollStatus(data.id, false);
+      })
+      .catch(err => setMsg("Error: " + err.message, "error"))
+      .finally(() => { submitBtn.disabled = false; });
+  });
+
+  ping();
+  loadHistory();
+  setInterval(ping, 20000);
+})();
+</script>
+</body>
+</html>
